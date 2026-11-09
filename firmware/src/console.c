@@ -232,6 +232,7 @@ static void con_status(void)
 #endif
 #if FELUCCA_FLASH
     con_kv("flash", flash_ok);
+    con_kx("flash_id", flash_jedec);              /* JEDEC id read at boot: 856014 Puya, B36014 UC25HQ80 */
 #endif
 }
 

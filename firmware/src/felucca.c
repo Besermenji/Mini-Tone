@@ -94,6 +94,7 @@
 #include "upreset.c"             /* user presets (RAM mirror; flash with FELUCCA_FLASH) */
 #include "project.c"
 #if FELUCCA_OTA
+#define OTA_FLASH_ID flash_jedec          /* the identity reply carries the flash id (project.c) */
 #include "ota.c"
 #include "ota_hw.c"
 #include "editor.c"              /* web editor SysEx (needs the OTA SysEx plumbing) */

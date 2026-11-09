@@ -51,7 +51,8 @@ static int st_prog(uint32_t off, const void *src, uint32_t n)
 }
 static uint32_t irq_save(void) { return 0; }
 static void irq_restore(uint32_t f) { (void)f; }
-static uint32_t fl_jedec_ram(void) { return 0; }
+static uint32_t jedec_stub;                      /* what the flash answers to 0x9F (jedec_test) */
+static uint32_t fl_jedec_ram(void) { return jedec_stub; }
 static void fl_plain_window_init(void) {}
 #define FL_FAR(fn) (fn)
 #include "../firmware/src/storage.c"
@@ -422,6 +423,29 @@ static int autosave_test(void)
     return bad;
 }
 
+/* persist_boot: the flash parts FM-1s ship with are used, anything else keeps the music in RAM (Felucca #320) */
+static int jedec_test(void)
+{
+    static const struct { uint32_t id; uint8_t ok; const char *what; } T[] = {
+        {0x856014u, 1, "JEDEC 0x856014 (Puya P25Q80): flash used"},
+        {0xB36014u, 1, "JEDEC 0xB36014 (UC25HQ80, newer FM-1s): flash used"},
+        {0xEF4014u, 0, "JEDEC 0xEF4014 (another 1 MiB part): RAM only"},
+        {0x000000u, 0, "JEDEC 0 (no answer): RAM only"},
+        {0xFFFFFFu, 0, "JEDEC 0xFFFFFF (floating bus): RAM only"},
+    };
+    int bad = 0;
+    uint32_t i;
+    for (i = 0; i < sizeof T / sizeof T[0]; i++) {
+        jedec_stub = T[i].id;
+        flash_ok = !T[i].ok;
+        persist_boot();
+        bad += check(T[i].what, flash_ok == T[i].ok && flash_jedec == T[i].id);
+    }
+    jedec_stub = 0;
+    flash_ok = 1;
+    return bad;
+}
+
 int main(void)
 {
     int bad = 0, ok;
@@ -700,6 +724,7 @@ int main(void)
                   irq_races == 3u && song.playing && !transport_req && persist_pending && erases == before);
     bad += mig_test();
     bad += autosave_test();
+    bad += jedec_test();
     printf("%s\n", bad ? "PERSISTENCE TEST FAILED" : "persistence test passed");
     return bad != 0;
 }

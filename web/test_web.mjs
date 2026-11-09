@@ -1628,7 +1628,9 @@ class FakeFM1 {
   rx(d) {
     if (eq(d, HS)) {
       const t = [...new TextEncoder().encode(this.identity)];
-      const body = [0, 0x59, 0x11, 0, 0, 0, ...t, ...new Array(28 - t.length).fill(0)];
+      const text = [...t, ...new Array(28 - t.length).fill(0)];
+      if (!this.identity.startsWith("ota-")) text.splice(24, 3, 0xB3, 0x60, 0x14);   // the running app reports its flash's JEDEC id (bytes 24..26)
+      const body = [0, 0x59, 0x11, 0, 0, 0, ...text];
       this.tx([0xF0, ...pack7(body), 0xF7]);
     } else if (eq(d, UPGRADE)) {
       this.queue = this.identity.startsWith("ota-")

@@ -66,6 +66,8 @@ class FakeLink:
 class FakeFM1:
     """a MIDI backend with one FM-1 on it"""
 
+    jedec = 0xB36014
+
     def __init__(self, image, identity="FM-1_015", name="FM-1", unplug_after=None, after_write="FM-1_900",
                  stall_after=None, bad_addr=None):
         self.image, self.unplug_after, self.after_write = image, unplug_after, after_write
@@ -100,7 +102,10 @@ class FakeFM1:
     def rx(self, d):
         if d == I.HS_QUERY:
             t = self.identity.encode()
-            self.tx(b"\xF0" + I.pack7(bytes([0, 0x59, 0x11, 0, 0, 0]) + t + bytes(28 - len(t))) + b"\xF7")
+            body = bytearray(t + bytes(28 - len(t)))
+            if not self.identity.startswith("ota-"):          # the running app reports its flash's JEDEC id (bytes 24..26)
+                body[24:27] = self.jedec.to_bytes(3, "big")
+            self.tx(b"\xF0" + I.pack7(bytes([0, 0x59, 0x11, 0, 0, 0]) + bytes(body)) + b"\xF7")
         elif d == I.UPGRADE:
             self.upgrades += 1
             first = self.bad_addr if self.bad_addr is not None else 0
@@ -201,6 +206,13 @@ def installs():
     dev = FakeFM1(image, identity="FM-1_905", name="Felucca")
     rc, out, err = cli(["--info"], dev)
     ok(rc == 0 and "FM-1_905" in out and "running" in out and dev.upgrades == 0, "--info: identity of the connected FM-1")
+    ok("JEDEC B36014" in out and "UC25HQ80" in out and "FM-1_905  [" in out, "--info: the flash's JEDEC id is named, and does not end up in the identity text")
+    dev = FakeFM1(image, identity="FM-1_905", name="Felucca"); dev.jedec = 0x856014
+    rc, out, err = cli(["--info"], dev)
+    ok("JEDEC 856014" in out and "Puya" in out, "--info: Puya flash")
+    dev = FakeFM1(image, identity="FM-1_015", name="FM-1"); dev.jedec = 0
+    rc, out, err = cli(["--info"], dev)
+    ok(rc == 0 and "FM-1_015" in out and "not reported" in out, "--info: a firmware that does not report the flash (stock V15)")
 
     dev = FakeFM1(image, identity="ota-FM-1_900", name="Felucca Update")
     rc, out, err = cli(["--info"], dev)

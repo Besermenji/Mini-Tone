@@ -100,8 +100,9 @@ def parse_request(pkt):
 
 
 class Identity:
-    def __init__(self, text, model, version):
+    def __init__(self, text, model, version, flash_id=0):
         self.text, self.model, self.version = text, model, version
+        self.flash_id = flash_id            # the flash's JEDEC id (0: not reported; stock V15 and older builds)
 
     @property
     def loader(self):
@@ -113,15 +114,25 @@ def printable(b):
     return "".join(chr(c) if 32 <= c < 127 else "?" for c in b)
 
 
+FLASH_NAMES = {0x856014: "Puya P25Q80", 0xB36014: "UC25HQ80 (the newer part)"}
+
+
+def flash_name(jedec):
+    if not jedec:
+        return "not reported (stock V15, an older build, or the update loader)"
+    return f"JEDEC {jedec:06X}  " + FLASH_NAMES.get(jedec, "unknown part")
+
+
 def parse_identity(pkt):
     if len(pkt) < 2 or pkt[0] != 0xF0 or pkt[-1] != 0xF7:
         return None
     d = unpack7(pkt[1:-1])
     if len(d) != 34 or d[:3] != b"\x00\x59\x11":
         return None
-    txt = printable(d[6:33].rstrip(b"\0"))
+    body = d[6:33]                          # the text ends at its first 0; bytes 24..26 are the JEDEC id
+    txt = printable(body.split(b"\0", 1)[0])
     m = re.fullmatch(r"([^_]+)_(\d+)", txt)
-    return Identity(txt, m[1], int(m[2])) if m else None
+    return Identity(txt, m[1], int(m[2]), int.from_bytes(body[24:27], "big")) if m else None
 
 
 # --------------------------------------------------------------- package ---
@@ -428,6 +439,7 @@ def run(a, backend, out, ask):
         dev.link.close()
         mode = "update loader (update not finished)" if dev.id.loader else "running"
         print(f"{dev.id.text}  [{mode}]  port: {dev.name}", file=out)
+        print("flash:   " + flash_name(dev.id.flash_id), file=out)
         return 0
     product, image = load_package(a.package, a.force)
     print(f"package: {product}  ({a.package})", file=out)

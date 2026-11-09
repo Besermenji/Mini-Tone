@@ -126,13 +126,20 @@ static int ota_send_msg(uint32_t cmd, const uint8_t *body, uint32_t n)   /* n <=
     return ota_wire_send(ota_wire, w);
 }
 
+#ifndef OTA_FLASH_ID
+#define OTA_FLASH_ID 0u                          /* the app sets it to the JEDEC id read at boot (felucca.c); the loader does not read it */
+#endif
+
 static void ota_reply_identity(void)
 {
     static const char ID[] = FELUCCA_ID;         /* == the package marker string */
     uint8_t id[27];
-    uint32_t i;
+    uint32_t i, j = OTA_FLASH_ID;
     for (i = 0; i < sizeof id; i++)
         id[i] = i < sizeof ID - 1u ? (uint8_t)ID[i] : 0;
+    id[24] = (uint8_t)(j >> 16);                 /* bytes 24..26: the flash's JEDEC id, MSB first (0: not read; Felucca #320). */
+    id[25] = (uint8_t)(j >> 8);                  /* The identity text ends at its first 0 byte. */
+    id[26] = (uint8_t)j;
     ota_send_msg(0x11, id, sizeof id);
 }
 
